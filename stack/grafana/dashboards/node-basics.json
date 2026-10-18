@@ -1,0 +1,50 @@
+{
+  "uid": "node-basics",
+  "title": "Node basics",
+  "tags": ["observability-stack"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "editable": true,
+  "refresh": "60s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1, "type": "timeseries", "title": "CPU usage",
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100, "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "100 - avg by (instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "Memory used",
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100, "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100", "legendFormat": "{{instance}}" }
+      ]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Filesystem used",
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 100, "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "(1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"}) * 100", "legendFormat": "{{instance}} {{mountpoint}}" }
+      ]
+    },
+    {
+      "id": 4, "type": "timeseries", "title": "Network",
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "fieldConfig": { "defaults": { "unit": "Bps", "custom": { "fillOpacity": 15 } }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*\"}[5m])", "legendFormat": "{{instance}} rx" },
+        { "refId": "B", "expr": "rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*\"}[5m])", "legendFormat": "{{instance}} tx" }
+      ]
+    }
+  ]
+}

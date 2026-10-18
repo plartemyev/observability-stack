@@ -1,0 +1,12 @@
+# Rendered by tools/render.sh — do not edit.
+# Thanos object-store config, shared by sidecar / store / compactor / bucket-web.
+# To move this hub's history to cloud S3 (R2, B2, ...): change endpoint +
+# credentials here, restart — nothing else in the stack references the bucket.
+type: S3
+config:
+  bucket: ${S3_BUCKET}
+  endpoint: garage:3900
+  region: garage
+  access_key: ${S3_ACCESS_KEY}
+  secret_key: ${S3_SECRET_KEY}
+  insecure: true

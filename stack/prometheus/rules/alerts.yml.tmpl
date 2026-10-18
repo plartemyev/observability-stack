@@ -1,0 +1,29 @@
+# Rendered by tools/render.sh from prometheus/rules/*.yml.tmpl — do not edit.
+groups:
+  - name: core
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }}/{{ $labels.instance }} is down"
+          description: "Scrape of {{ $labels.instance }} (job {{ $labels.job }}) has failed for 5 minutes."
+
+      - alert: HostFilesystemAlmostFull
+        expr: |
+          (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) * 100 > 85
+        for: 20m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Filesystem {{ $labels.mountpoint }} on {{ $labels.instance }} is {{ $value | humanizePercentage }} full"
+
+      - alert: HostOutOfMemory
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host {{ $labels.instance }} has less than 10% memory available"

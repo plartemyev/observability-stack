@@ -1,0 +1,14 @@
+[Unit]
+Description=Grafana Alloy (logs to hub Loki)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# root: journald access without extra group plumbing on heterogeneous devices
+User=root
+ExecStart=/usr/local/bin/alloy run --server.http.listen-addr=127.0.0.1:12345 --storage.path=/var/lib/alloy/data /etc/alloy/config.alloy
+Restart=on-failure
+StateDirectory=alloy
+
+[Install]
+WantedBy=multi-user.target

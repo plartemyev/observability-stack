@@ -1,0 +1,39 @@
+{
+  "uid": "hub-overview",
+  "title": "Hub overview",
+  "tags": ["observability-stack"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "editable": true,
+  "refresh": "60s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1, "type": "stat", "title": "Targets up",
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "count(up == 1)" } ]
+    },
+    {
+      "id": 2, "type": "stat", "title": "Targets down",
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "red", "value": 1 } ] } }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "count(up == 0) or vector(0)" } ]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Scrape duration (s)",
+      "datasource": { "type": "prometheus", "uid": "thanos" },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [ { "refId": "A", "expr": "scrape_duration_seconds", "legendFormat": "{{job}}/{{instance}}" } ]
+    },
+    {
+      "id": 4, "type": "logs", "title": "Hub container logs",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 6 },
+      "targets": [ { "refId": "A", "expr": "{container=~\".+\"}" } ]
+    }
+  ]
+}

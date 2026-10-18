@@ -1,0 +1,30 @@
+# Rendered by tools/render.sh — do not edit.
+# Garage object store, single node. replication_factor = 1 means ONE COPY of
+# the data on this disk: acceptable for a personal hub because every Thanos
+# block in the bucket is derived data (rebuildable by letting Prometheus run
+# and re-upload), and because thanos/bucket.yaml can be pointed at a cloud
+# S3 (R2/B2) later without any other change.
+
+replication_factor = 1
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+
+# sqlite over lmdb: survives unclean shutdown (personal hubs crash), and the
+# metadata DB stays portable between machines/architectures. Slower than
+# lmdb — irrelevant at Thanos-block write rates (one block upload per 2h).
+db_engine = "sqlite"
+metadata_auto_snapshot_interval = "1d"
+
+# zstd -1 (fast). Thanos chunks are already snappy-compressed internally.
+compression_level = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_secret = "${RPC_SECRET}"
+
+[s3_api]
+api_bind_addr = "[::]:3900"
+s3_region = "garage"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "${GARAGE_ADMIN_TOKEN}"

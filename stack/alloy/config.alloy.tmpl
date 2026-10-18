@@ -1,0 +1,59 @@
+// Rendered by tools/render.sh — do not edit.
+// Hub-local Alloy: ships this compose project's container logs into Loki.
+// Remote devices get their own (smaller) config from the device_agent role.
+
+discovery.docker "hub" {
+  host = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+discovery.relabel "hub_logs" {
+  targets = discovery.docker.hub.targets
+
+  // readable container name → label
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    target_label = "project"
+    replacement  = "${PROJECT_NAME}"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = "${HUB_HOSTNAME}"
+  }
+
+  // don't feed Alloy its own logs back into Loki
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/.*alloy.*"
+    action        = "drop"
+  }
+}
+
+loki.source.docker "hub" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.hub_logs.output
+  forward_to = [loki.relabel.tenant.receiver]
+}
+
+// Tenant must be set in the PIPELINE: sources drop __-labels from discovery
+// targets, and loki.write picks the tenant off the __tenant_id__ label.
+loki.relabel "tenant" {
+  forward_to = [loki.write.default.receiver]
+
+  rule {
+    target_label = "__tenant_id__"
+    replacement  = "${PROJECT_NAME}"
+  }
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

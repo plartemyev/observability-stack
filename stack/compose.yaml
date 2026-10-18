@@ -1,0 +1,214 @@
+# Observability hub — one compose project per project/region.
+# Render configs first:  tools/render.sh deployments/<site>.env
+# Then:                  docker compose up -d   (from stack/)
+name: ${COMPOSE_PROJECT_NAME}
+
+services:
+  # ── Object store (bucket for Thanos blocks) ────────────────────────────
+  garage:
+    image: dxflrs/garage:${GARAGE_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - ${DATA_DIR}/garage/meta:/var/lib/garage/meta
+      - ${DATA_DIR}/garage/data:/var/lib/garage/data
+    # 3900 S3 API / 3901 RPC / 3903 admin API — internal only.
+
+  # ── Metrics: Prometheus + Thanos (bucket = long-term store) ────────────
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${TSDB_RETENTION}
+      - --storage.tsdb.min-block-duration=2h
+      - --storage.tsdb.max-block-duration=2h
+      - --web.listen-address=:9090
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - ./prometheus/targets:/etc/prometheus/targets:ro
+      - ${DATA_DIR}/prometheus:/prometheus
+
+  thanos-sidecar:
+    # Canonical image is quay.io/thanos-io/thanos; using the project's official
+    # Docker Hub mirror (thanosio) because this host cannot pull anonymously
+    # from quay.io (auth endpoint denies anonymous tokens, probed 2026-10-18).
+    image: docker.io/thanosio/thanos:${THANOS_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    command:
+      - sidecar
+      - --prometheus.url=http://prometheus:9090
+      - --tsdb.path=/prometheus
+      - --objstore.config-file=/thanos/bucket.yaml
+      - --grpc-address=:10901
+      - --http-address=:10902
+    volumes:
+      - ./thanos/bucket.yaml:/thanos/bucket.yaml:ro
+      - ${DATA_DIR}/prometheus:/prometheus:ro
+    depends_on:
+      - prometheus
+
+  thanos-query:
+    image: docker.io/thanosio/thanos:${THANOS_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    command:
+      - query
+      - --http-address=:9090
+      - --grpc-address=:10901
+      - --endpoint=thanos-sidecar:10901
+      - --endpoint=thanos-store:10901
+    ports:
+      - "${BIND_IP}:${QUERY_PORT}:9090"
+    depends_on:
+      - thanos-sidecar
+      - thanos-store
+
+  thanos-store:
+    image: docker.io/thanosio/thanos:${THANOS_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    command:
+      - store
+      - --data-dir=/store
+      - --objstore.config-file=/thanos/bucket.yaml
+      - --grpc-address=:10901
+      - --http-address=:10902
+    volumes:
+      - ./thanos/bucket.yaml:/thanos/bucket.yaml:ro
+      - ${DATA_DIR}/thanos-store:/store
+    depends_on:
+      - garage
+
+  thanos-compact:
+    image: docker.io/thanosio/thanos:${THANOS_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    command:
+      - compact
+      - --data-dir=/compact
+      - --objstore.config-file=/thanos/bucket.yaml
+      - --http-address=:10902
+      - --retention.resolution-raw=${RETENTION_RAW}
+      - --retention.resolution-5m=${RETENTION_5M}
+      - --retention.resolution-1h=${RETENTION_1H}
+      - --wait
+    volumes:
+      - ./thanos/bucket.yaml:/thanos/bucket.yaml:ro
+      - ${DATA_DIR}/thanos-compact:/compact
+    depends_on:
+      - garage
+
+  thanos-bucket-web:
+    image: docker.io/thanosio/thanos:${THANOS_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    command:
+      - tools
+      - bucket
+      - web
+      - --objstore.config-file=/thanos/bucket.yaml
+      - --http-address=:9094
+    volumes:
+      - ./thanos/bucket.yaml:/thanos/bucket.yaml:ro
+    ports:
+      - "${BIND_IP}:${BUCKET_WEB_PORT}:9094"
+    profiles: ["tools"]
+    depends_on:
+      - garage
+
+  # ── Logs ────────────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:${LOKI_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml:ro
+      - ${DATA_DIR}/loki:/loki
+    ports:
+      - "${BIND_IP}:${LOKI_PORT}:3100"
+
+  alloy:
+    image: grafana/alloy:${ALLOY_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    group_add:
+      - "${DOCKER_GID}"
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # shadow the image's root-owned /var/lib/alloy entirely (2770 alloy:alloy
+      # otherwise blocks uid traversal to the mountpoint)
+      - ${DATA_DIR}/alloy:/var/lib/alloy
+    depends_on:
+      - loki
+
+  # ── Alerting ────────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:${ALERTMANAGER_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${DATA_DIR}/alertmanager:/alertmanager
+
+  # ── CloudWatch metrics (profile "cloudwatch" — OFF by default) ──────────
+  # Rendered config lives in ./yace/config.yaml; AWS credentials in ./yace/aws.env.
+  # Enable: set YACE_ENABLED=true in the vars file, render, then:
+  #   docker compose --profile cloudwatch up -d yace
+  yace:
+    image: ghcr.io/nerdswords/yet-another-cloudwatch-exporter:${YACE_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    command:
+      - --config
+      - /etc/yace/config.yaml
+    env_file:
+      - ./yace/aws.env
+    volumes:
+      - ./yace/config.yaml:/etc/yace/config.yaml:ro
+    # :5000/metrics scraped by prometheus via stack/prometheus/targets/yace.yml
+    # (rendered only when YACE_ENABLED=true).
+
+  # ── Visualization ───────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION}
+    restart: unless-stopped
+    user: "${RUN_UID}:${RUN_GID}"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ${DATA_DIR}/grafana:/var/lib/grafana
+    ports:
+      - "${BIND_IP}:${GRAFANA_PORT}:3000"
+
+  # ── Hub self-monitoring ─────────────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:${NODE_EXPORTER_VERSION}
+    restart: unless-stopped
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host:ro

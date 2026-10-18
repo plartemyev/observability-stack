@@ -1,0 +1,9 @@
+[Unit]
+Description=observability-stack hub backup
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=BACKUP_DIR=${BACKUP_DIR}
+Environment=BACKUP_KEEP=${BACKUP_KEEP}
+ExecStart=/usr/local/bin/obs-backup ${VARS_PATH}

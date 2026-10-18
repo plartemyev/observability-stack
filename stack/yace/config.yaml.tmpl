@@ -1,0 +1,21 @@
+# Placeholder — rendered by tools/render.sh. When YACE_ENABLED=true, this file
+# is replaced by the contents of YACE_ACCOUNTS_FILE. Schema reference (v0.68):
+#
+# apiVersion: v1alpha1
+# accounts:
+#   - account_id: "123456789012"        # one block per AWS account
+#     regions: [eu-central-1, us-east-1]
+#     metrics:
+#       - name: CPUUtilization
+#         namespace: AWS/EC2
+#         statistics: [Average, Maximum]
+#         period: 300          # seconds per datapoint
+#         length: 86400        # lookback window (tagged resources + metrics)
+#         delay: 300
+#       - name: VolumeReadBytes
+#         namespace: AWS/EBS
+#         statistics: [Sum]
+#         period: 300
+#         length: 86400
+apiVersion: v1alpha1
+accounts: []

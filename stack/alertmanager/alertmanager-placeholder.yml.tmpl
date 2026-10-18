@@ -1,0 +1,14 @@
+# Rendered by tools/render.sh — do not edit.
+# This placeholder is used while TELEGRAM_BOT_TOKEN is unset in the vars file:
+# alerts fire in Prometheus and are visible in the AM UI, but nothing is
+# delivered. Set TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID and re-render to switch
+# to the Telegram receiver.
+route:
+  receiver: unconfigured
+  group_by: [alertname, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: unconfigured

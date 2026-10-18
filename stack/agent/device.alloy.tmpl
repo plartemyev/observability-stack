@@ -1,0 +1,28 @@
+// Rendered per-device by tools/obsdeploy (agent alloy phase) — do not edit.
+// Ships this device's journald to the hub's Loki. Metrics are NOT pushed:
+// the hub's Prometheus pulls node_exporter (Zabbix-style).
+
+loki.source.journald "system" {
+  max_age    = "12h"
+  forward_to = [loki.relabel.tenant.receiver]
+}
+
+loki.relabel "tenant" {
+  forward_to = [loki.write.hub.receiver]
+
+  rule {
+    target_label = "__tenant_id__"
+    replacement  = "${PROJECT_NAME}"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = "${AGENT_NAME}"
+  }
+}
+
+loki.write "hub" {
+  endpoint {
+    url = "http://${HUB_ADDRESS}:${LOKI_PORT}/loki/api/v1/push"
+  }
+}

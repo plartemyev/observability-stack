@@ -1,0 +1,24 @@
+# Rendered by tools/render.sh — do not edit.
+apiVersion: 1
+
+datasources:
+  - name: Thanos
+    uid: thanos
+    type: prometheus
+    access: proxy
+    url: http://thanos-query:9090
+    isDefault: true
+    jsonData:
+      timeInterval: ${SCRAPE_INTERVAL}
+      httpMethod: POST
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+      httpHeaderName1: X-Scope-OrgID
+    secureJsonData:
+      httpHeaderValue1: ${PROJECT_NAME}

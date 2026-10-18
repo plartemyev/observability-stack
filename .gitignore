@@ -1,0 +1,20 @@
+# rendered outputs (generated from *.tmpl by tools/render.sh)
+stack/.env
+stack/garage/garage.toml
+stack/prometheus/prometheus.yml
+stack/prometheus/rules/alerts.yml
+stack/prometheus/targets/*.yml
+stack/thanos/bucket.yaml
+stack/loki/loki.yml
+stack/alloy/config.alloy
+stack/alertmanager/alertmanager.yml
+stack/grafana/provisioning/datasources/datasources.yaml
+stack/yace/config.yaml
+stack/yace/aws.env
+
+# state (the backup target) and scratch
+stack/data/
+tmp/
+
+# deployment vars files carry generated secrets — only *.env.example is tracked
+deployments/*.env
